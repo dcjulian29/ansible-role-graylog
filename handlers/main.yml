@@ -1,0 +1,36 @@
+---
+- name: Remove MongoDB
+  ansible.builtin.command: "docker stop {{ item }} && docker rm {{ item }}"
+  register: results
+  with_items:
+    - "{{ graylog_name_mongo }}"
+  failed_when: >-
+    results is failed and
+    "No such container" not in results.stderr | default(false)
+
+- name: Restart MongoDB
+  ansible.builtin.command: "docker restart {{ graylog_name_mongo }}"
+
+- name: Remove Opensearch
+  ansible.builtin.command: "docker stop {{ item }} && docker rm {{ item }}"
+  register: results
+  with_items:
+    - "{{ graylog_name_search }}"
+  failed_when: >-
+    results is failed and
+    "No such container" not in results.stderr | default(false)
+
+- name: Restart Opensearch
+  ansible.builtin.command: "docker restart {{ graylog_name_search }}"
+
+- name: Remove Graylog
+  ansible.builtin.command: "docker stop {{ item }} && docker rm {{ item }}"
+  register: results
+  with_items:
+    - "{{ graylog_name }}"
+  failed_when: >-
+    results is failed and
+    "No such container" not in results.stderr | default(false)
+
+- name: Restart Graylog
+  ansible.builtin.command: "docker restart {{ graylog_name }}"

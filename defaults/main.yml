@@ -1,0 +1,45 @@
+---
+graylog_admin_user: admin
+graylog_dir_data: /opt/graylog/data
+graylog_dir_journal: /opt/graylog/journal
+graylog_dir_mongo: /opt/mongodb
+graylog_dir_search: /opt/opensearch
+# graylog_email_auth_username: submit@example.com
+# graylog_email_auth_password: secret
+graylog_email_enabled: false
+# graylog_email_from_email: graylog@example.com
+# graylog_email_hostname: mail.example.com
+# graylog_email_port: 587
+# graylog_email_subject_prefix: '[graylog]'
+# graylog_email_use_auth: true
+# graylog_email_use_tls: true     # Enable SMTP with STARTTLS
+# graylog_email_use_ssl: false    # Enable SMTP over SSL (SMTPS)
+graylog_http_enable_tls: false
+# graylog_http_tls_cert_file: /path/to/graylog.crt
+# graylog_http_tls_key_file: /path/to/graylog.key
+# graylog_http_tls_key_passwd: ''
+graylog_id_file: /usr/share/graylog/data/config/node-id
+graylog_image_graylog: 'graylog/graylog'
+graylog_image_mongo: 'mongo'
+graylog_image_search: 'opensearchproject/opensearch'
+graylog_imagetag_graylog: '5.1'
+graylog_imagetag_mongo: '5.0'
+graylog_imagetag_search: '2.4.0'
+graylog_jvm_heapsize: 1g
+graylog_master: true
+graylog_name: "graylog_{{ ansible_host }}"
+graylog_name_mongo: "mongo_{{ ansible_host }}"
+graylog_name_search: "opensearch_{{ ansible_host }}"
+graylog_passwd: 'admin1'
+graylog_ports:
+  - '{{ graylog_uri_port }}:9000'  # Web interface and REST API
+  - '1514:1514'                    # Syslog TCP
+  - '1514:1514/udp'                # Syslog UDP
+  - '12201:12201'                  # GELF TCP
+  - '12201:12201/udp'              # GELF UDP
+  - '13301:13301'                  # Forwarder Data
+  - '13302:13302'                  # Forwarder Config
+graylog_seed: J50JirIxJsJdVrSmMYjP7l8Ip
+graylog_timezone: "{{ ansible_date_time.tz }}"
+graylog_uri: 'http://0.0.0.0:{{ graylog_uri_port }}'
+graylog_uri_port: 9000

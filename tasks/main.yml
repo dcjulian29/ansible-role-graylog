@@ -1,0 +1,164 @@
+---
+- name: Ensure data directories exists
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: 1100
+    group: docker
+    mode: "0770"
+  with_items:
+    - "{{ graylog_dir_data }}"
+    - "{{ graylog_dir_journal }}"
+
+- name: Ensure mongo directory exist
+  ansible.builtin.file:
+    path: "{{ graylog_dir_mongo }}"
+    state: directory
+    owner: root
+    group: docker
+    mode: "0770"
+
+- name: Ensure search directory exist
+  ansible.builtin.file:
+    path: "{{ graylog_dir_search }}"
+    state: directory
+    owner: 1000
+    group: docker
+    mode: "0770"
+
+- name: Ensure SWAP space is used last in memory operations
+  ansible.posix.sysctl:
+    name: vm.max_map_count
+    value: 262144
+    state: present
+    reload: true
+
+- name: Determine standardized current timezone
+  ansible.builtin.stat:
+    path: /etc/localtime
+  register: etc_localtime
+
+- name: Store standardized current timezone
+  ansible.builtin.set_fact:
+    graylog_timezone: "{{ etc_localtime.stat.lnk_source | regex_replace('^/usr/share/zoneinfo/', '') }}"
+  when:
+    - etc_localtime.stat.exists
+    - etc_localtime.stat.islnk
+    - etc_localtime.stat.lnk_source is match("/usr/share/zoneinfo/.*")
+
+- name: Refresh facts
+  ansible.builtin.setup:
+
+- name: Determine host docker interface IP
+  ansible.builtin.set_fact:
+    graylog_docker_ip: "{{ ansible_docker0.ipv4.address }}"
+
+- name: Pull MongoDB docker image
+  community.docker.docker_image:
+    name: "{{ graylog_image_mongo }}"
+    source: pull
+    tag: "{{ graylog_imagetag_mongo }}"
+  notify: Remove MongoDB
+
+- name: Pull Opensearch docker image
+  community.docker.docker_image:
+    name: "{{ graylog_image_search }}"
+    source: pull
+    tag: "{{ graylog_imagetag_search }}"
+  notify: Remove Opensearch
+
+- name: Pull Graylog docker image
+  community.docker.docker_image:
+    name: "{{ graylog_image_graylog }}"
+    source: pull
+    tag: "{{ graylog_imagetag_graylog }}"
+  notify: Remove Graylog
+
+- name: Ensure all handlers run before continuing
+  ansible.builtin.meta: flush_handlers
+
+- name: Ensure MongoDB container is created
+  community.docker.docker_container:
+    container_default_behavior: no_defaults
+    detach: true
+    image: "{{ graylog_image_mongo }}:{{ graylog_imagetag_mongo }}"
+    interactive: false
+    name: "{{ graylog_name_mongo }}"
+    ports:
+      - "{{ graylog_docker_ip }}:27017:27017"
+    state: present
+    volumes:
+      - "/etc/localtime:/etc/localtime:ro"
+      - "{{ graylog_dir_mongo }}:/data/db"
+  notify: Restart MongoDB
+
+- name: Create Opensearch container
+  community.docker.docker_container:
+    container_default_behavior: no_defaults
+    detach: true
+    env:
+      bootstrap_memory_lock: "true"
+      discovery.type: single-node
+      OPENSEARCH_JAVA_OPTS: "-Xms{{ graylog_jvm_heapsize }} -Xmx{{ graylog_jvm_heapsize }}"
+      plugins.security.ssl.http.enabled: "false"
+      plugins.security.disabled: "true"
+    image: "{{ graylog_image_search }}:{{ graylog_imagetag_search }}"
+    interactive: false
+    name: "{{ graylog_name_search }}"
+    ports:
+      - "{{ graylog_docker_ip }}:9200:9200"
+    restart_policy: always
+    state: present
+    volumes:
+      - "/etc/localtime:/etc/localtime:ro"
+      - "{{ graylog_dir_search }}:/usr/share/opensearch/data"
+    ulimits:
+      - "memlock:-1:-1"
+      - "nofile:65536:65536"
+  notify: Restart Opensearch
+
+- name: Create Graylog container
+  community.docker.docker_container:
+    container_default_behavior: no_defaults
+    detach: true
+    env:
+      ES_JAVA_OPTS: "-Xms{{ graylog_jvm_heapsize }} -Xmx{{ graylog_jvm_heapsize }}"
+      GRAYLOG_ELASTICSEARCH_HOSTS: "http://{{ graylog_docker_ip }}:9200"
+      GRAYLOG_EMAIL_AUTH_USERNAME: "{{ graylog_email_auth_username | default(omit) }}"
+      GRAYLOG_EMAIL_AUTH_PASSWORD: "{{ graylog_email_auth_password | default(omit) }}"
+      GRAYLOG_EMAIL_ENABLED: "{{ graylog_email_enabled | default('false') | quote | lower | string }}"
+      GRAYLOG_EMAIL_FROM_EMAIL: "{{ graylog_email_from_email | default(omit) }}"
+      GRAYLOG_EMAIL_HOSTNAME: "{{ graylog_email_hostname | default(omit) }}"
+      GRAYLOG_EMAIL_PORT: "{{ graylog_email_port | default(omit) }}"
+      GRAYLOG_EMAIL_SUBJECT_PREFIX: "{{ graylog_email_subject_prefix | default(omit) }}"
+      GRAYLOG_EMAIL_USE_AUTH: "{{ graylog_email_use_auth | default('false') | quote | lower | string }}"
+      GRAYLOG_EMAIL_USE_SSL: "{{ graylog_email_use_ssl | default('false') | quote | lower | string }}"
+      GRAYLOG_EMAIL_USE_TLS: "{{ graylog_email_use_tls | default('true') | quote | lower | string }}"
+      GRAYLOG_HTTP_BIND_ADDRESS: "0.0.0.0:{{ graylog_uri_port }}"
+      GRAYLOG_HTTP_ENABLE_TLS: "{{ graylog_http_enable_tls | default('false') | quote | lower | string }}"
+      GRAYLOG_HTTP_EXTERNAL_URI: "{{ graylog_uri }}/"
+      GRAYLOG_HTTP_TLS_CERT_FILE: "{{ graylog_http_tls_cert_file | default(omit) }}"
+      GRAYLOG_HTTP_TLS_KEY_FILE: "{{ graylog_http_tls_key_file | default(omit) }}"
+      GRAYLOG_HTTP_TLS_KEY_PASSWORD: "{{ graylog_http_tls_key_passwd | default(omit) }}"
+      GRAYLOG_IS_MASTER: "{{ graylog_master | default('true') | quote | lower | string }}"
+      GRAYLOG_MONGODB_URI: "mongodb://{{ graylog_docker_ip }}:27017/graylog"
+      GRAYLOG_NODE_ID_FILE: "{{ graylog_id_file }}"
+      GRAYLOG_PASSWORD_SECRET: "{{ graylog_seed }}"
+      GRAYLOG_ROOT_EMAIL: "{{ graylog_admin_email | default('') }}"
+      GRAYLOG_ROOT_PASSWORD_SHA2: "{{ graylog_passwd | hash('sha256') }}"
+      GRAYLOG_ROOT_TIMEZONE: "{{ graylog_admin_timezone | default(graylog_timezone) }}"
+      GRAYLOG_ROOT_USERNAME: "{{ graylog_admin_user }}"
+      TZ: "{{ graylog_timezone }}"
+    image: "{{ graylog_image_graylog }}:{{ graylog_imagetag_graylog }}"
+    interactive: false
+    links:
+      - "{{ graylog_name_mongo }}"
+      - "{{ graylog_name_search }}"
+    name: "{{ graylog_name }}"
+    ports: "{{ graylog_ports }}"
+    restart_policy: always
+    state: present
+    volumes:
+      - "{{ graylog_dir_data }}:/usr/share/graylog/data/data"
+      - "{{ graylog_dir_journal }}:/usr/share/graylog/data/journal"
+  notify: Restart Graylog
