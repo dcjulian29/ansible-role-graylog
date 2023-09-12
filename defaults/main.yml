@@ -27,9 +27,9 @@ graylog_imagetag_mongo: '5.0'
 graylog_imagetag_search: '2.4.0'
 graylog_jvm_heapsize: 1g
 graylog_master: true
-graylog_name: "graylog_{{ ansible_host }}"
-graylog_name_mongo: "mongo_{{ ansible_host }}"
-graylog_name_search: "opensearch_{{ ansible_host }}"
+graylog_name: "graylog_{{ ansible_hostname }}"
+graylog_name_mongo: "mongo_{{ ansible_hostname }}"
+graylog_name_search: "opensearch_{{ ansible_hostname }}"
 graylog_passwd: 'admin1'
 graylog_ports:
   - '{{ graylog_uri_port }}:9000'  # Web interface and REST API
@@ -37,8 +37,6 @@ graylog_ports:
   - '1514:1514/udp'                # Syslog UDP
   - '12201:12201'                  # GELF TCP
   - '12201:12201/udp'              # GELF UDP
-  - '13301:13301'                  # Forwarder Data
-  - '13302:13302'                  # Forwarder Config
 graylog_seed: J50JirIxJsJdVrSmMYjP7l8Ip
 graylog_timezone: "{{ ansible_date_time.tz }}"
 graylog_uri: 'http://0.0.0.0:{{ graylog_uri_port }}'
